@@ -1,0 +1,158 @@
+#!/bin/bash
+
+help() {
+   echo 'usage: renew-le-certificate'
+   echo '       renew-le-certificate --help'
+   echo
+   echo '    Renew a Letsencrypt certificate on a Synology box,'
+   echo '    that is behind a FRITZ!Box.'
+   echo
+   echo '    1. will open port 80 forwarding on a FRITZ!Box to'
+   echo '       the Synology box'
+   echo '    2. will renew the Letsencrypt certificate on the'
+   echo '       Synology box'
+   echo '    3. will disable the port 80 forwarding'
+   echo
+   echo '    This script (and if needed its config files) need'
+   echo '    to be installed on and run from the Synology box'
+   echo '    and the Synology box needs to be able to reach the'
+   echo '    FRITZ!Box.'
+   echo
+   echo '     You can set the following variables directly in the'
+   echo '     script, or in ~/.renew-le-certificate.conf :'
+   echo
+   echo '     FB=fritz.box'
+   echo '     FB_USER=fritz1234'
+   echo '     FB_PASS=password'
+   echo '     FB_CERT=~/.fritzbox.pem'
+   echo '     SYNOLOGY=0.0.0.1'
+   echo
+   echo '     FB_CERT can be left empty but then the https'
+   echo '     connection will NOT be authenticated'
+   echo
+   exit 1
+}
+
+# replace as adequate or...
+#
+FB=fritz.box
+FB_USER=fritz1234
+FB_PASS=password
+FB_CERT=~/.fritzbox.pem # can be left empty but then the https
+#                       # connection will NOT be authenticated
+SYNOLOGY=0.0.0.1
+
+# ... set it in ~/.renew-le-certificate.conf
+# make sure ~/.renew-le-certificate.conf is rwx------
+#
+[ -f ~/.renew-le-certificate.conf ] && source ~/.renew-le-certificate.conf
+
+# TODO: maybe it'd better to use the a UPnP tool instead
+#       of using curl
+#
+# Docu:
+#
+# * nice overview over useful UPNP calls:
+#   https://blog.grimreapers.de/index.php/2020/03/08/probleme-bei-der-portfreigabe-ueber-upnp-von-systemen-hinter-einem-usg-ohne-nat-und-einer-fritzbox/
+#
+# * nice Python script:
+#   https://www.heise.de/forum/c-t/Kommentare-zu-c-t-Artikeln/Fritzbox-per-Skript-fernsteuern/Re-AddPortMapping-mit-Python-funktioniert-nicht-Upate/posting-30922097/show/
+#
+# * one line curl commands for FritzBox:
+#   https://knx-user-forum.de/forum/supportforen/smarthome-py/934835-avm-plugin?p=1533217#post1533217
+#
+# * Gettings started with TR-064/UPnP by AVM:
+#   https://avm.de/fileadmin/user_upload/Global/Service/Schnittstellen/AVM_TR-064_first_steps.pdf
+#
+# * Technical Notes about TR-064/UPnP by AVM:
+#   https://avm.de/fileadmin/user_upload/Global/Service/Schnittstellen/AVM_Technical_Note_-_Konfiguration_ueber_TR-064.pdf
+#
+# * TR-064 - WAN IP Connection API docu from AVM:
+#   https://avm.de/fileadmin/user_upload/Global/Service/Schnittstellen/wanipconnSCPD.pdf
+#
+# * Schnittstellen und Protokolle rund um FritzBox:
+#   https://avm.de/service/schnittstellen/
+#
+# * LE Renewal on Syno
+#   https://www.synology-forum.de/threads/automatisierte-lets-encrypt-erneuerung-inkl-portfreigabe-fritz-box-integration.106559/post-860429
+#
+# * libfritzpp C++ lib:
+#   https://github.com/jowi24/libfritzpp/blob/master/FritzClient.cpp
+#
+# * fritzctl go binary that works, that can authenticate, but doesn't
+#   know much about the TR-064 interface
+#   https://github.com/bpicode/fritzctl
+#
+# * not relevant for UPnP but I keep it here for docu for myself:
+#
+#   * old md5 way to log in :
+#     http://www.apfel-z.net/artikel/Fritz_Box_API_via_curl_wget
+#
+#   * How to log in by AVM (not relevant for UPnP):
+#     https://avm.de/fileadmin/user_upload/Global/Service/Schnittstellen/AVM_Technical_Note_-_Session_ID_english_2021-05-03.pdf
+#     in the past the FritzBox was using md5 hash
+#     based auth. They have moved to a PBKDF2 hash
+#     as of FRITZ!OS: 07.28 I could not get the
+#     old md5 based auth to work. Does it work at
+#     all any more?
+#
+
+[ "$1" == "--help" ] && help
+
+if [ "$FB_CERT" == "" ]; then
+  USE_CERT=-k
+else
+  USE_CERT="--cacert $FB_CERT"
+fi
+
+# port_80_forwarding_to_synology 1 - enable
+# port_80_forwarding_to_synology 0 - disable
+#
+port_80_forwarding_to_synology() {
+  curl $USE_CERT --anyauth -u $FB_USER:$FB_PASS \
+       'https://'$FB':49443/upnp/control/wanipconnection1' \
+	   -H 'Content-Type: text/xml; charset="utf-8"' \
+	   -H 'SoapAction: urn:dslforum-org:service:WANIPConnection:1#AddPortMapping' \
+	   -d '
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:AddPortMapping xmlns:u="urn:schemas-upnp-org:service:WANIPConnection:1">
+      <NewRemoteHost></NewRemoteHost>
+      <NewExternalPort>80</NewExternalPort>
+      <NewProtocol>TCP</NewProtocol>
+      <NewInternalPort>80</NewInternalPort>
+      <NewInternalClient>'$SYNOLOGY'</NewInternalClient>
+      <NewEnabled>'$1'</NewEnabled>
+      <NewPortMappingDescription>HTTP to Synology</NewPortMappingDescription>
+      <NewLeaseDuration>0</NewLeaseDuration>
+    </u:AddPortMapping>
+  </s:Body>
+</s:Envelope>'
+
+}
+
+enable_port_80_forwarding_to_synology() {
+  port_80_forwarding_to_synology 1 # enable
+}
+
+# I could not get DeletePortMapping to work
+#
+disable_port_80_forwarding_to_synology() {
+  port_80_forwarding_to_synology 0 # disable
+}
+
+
+if enable_port_80_forwarding_to_synology; then
+  /usr/syno/sbin/syno-letsencrypt renew-all -vv
+  status=$?
+fi
+
+disable_port_80_forwarding_to_synology
+
+if [ "$status" == "0" ]; then
+  echo "success :-)"
+  exit 0
+else
+  echo "failed"
+  exit 1
+fi
