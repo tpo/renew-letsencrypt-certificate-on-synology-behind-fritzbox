@@ -1,0 +1,30 @@
+usage: renew-le-certificate
+       renew-le-certificate --help
+
+    Renew a Letsencrypt certificate on a Synology box,
+    that is behind a FRITZ!Box.
+
+    1. will open port 80 forwarding on a FRITZ!Box to
+       the Synology box
+    2. will renew the Letsencrypt certificate on the
+       Synology box
+    3. will disable the port 80 forwarding
+
+    This script (and if needed its config files) need
+    to be installed on and run from the Synology box
+    and the Synology box needs to be able to reach the
+    FRITZ!Box.
+
+     You can set the following variables directly in the
+     script, or in ~/.renew-le-certificate.conf :
+
+         SYNOLOGY=0.0.0.1
+
+     Also to see what Fritzbox settings you need to set
+     execute:
+
+         fritzbox-forward-port --help
+
+     NOTE: this script depends on the fritzbox-forward-port
+           script from https://github.com/tpo/fritzbox-forwad-port
+
