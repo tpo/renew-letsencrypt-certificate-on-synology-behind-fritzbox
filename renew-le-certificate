@@ -29,7 +29,7 @@ help() {
    echo '         fritzbox-forward-port --help'
    echo
    echo '     NOTE: this script depends on the fritzbox-forward-port'
-   echo '           script from https://github.com/tpo/fritzbox-forwad-port'
+   echo '           script from https://github.com/tpo/fritzbox-forward-port'
    echo
    exit 0
 }
@@ -49,13 +49,13 @@ SYNOLOGY=0.0.0.1
 [ "$1" == "--help" ] && help
 
 enable_port_80_forwarding_to_synology() {
-  fritzbox-forwad-port ENABLE "$SYNOLOGY" 80 "HTTP to Synology"
+  fritzbox-forward-port ENABLE "$SYNOLOGY" 80 "HTTP to Synology"
 }
 
 # I could not get DeletePortMapping to work
 #
 disable_port_80_forwarding_to_synology() {
-  fritzbox-forwad-port DISABLE "$SYNOLOGY" 80 "HTTP to Synology"
+  fritzbox-forward-port DISABLE "$SYNOLOGY" 80 "HTTP to Synology"
 }
 
 if enable_port_80_forwarding_to_synology; then
